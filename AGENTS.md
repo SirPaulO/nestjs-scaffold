@@ -98,9 +98,31 @@ npm run db:seed                # Seed database (create src/database/seeds/seed.t
 
 ---
 
-## Git
+## Git Workflow
 
-Conventional Commits: `feat(scope):`, `fix(scope):`, `docs(scope):`, `test(scope):`
+### Commit Messages (Conventional Commits)
+```
+feat(scope): description
+fix(scope): description
+test(scope): description
+docs(scope): description
+```
+
+### Branch Naming
+- `feature/description`
+- `fix/description`
+- `hotfix/description`
+- `refactor/description`
+
+### Commit Signing
+
+Always sign commits with SSH key.
+
+To load key you must execute this
+
+```bash
+eval $(../load.sh)
+```
 
 ---
 
