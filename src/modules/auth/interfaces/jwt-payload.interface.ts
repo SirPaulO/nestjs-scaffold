@@ -1,16 +1,12 @@
-/**
- * JWT access-token payload.
- * Extend `roles` or add custom claims to suit your domain.
- */
 export interface JwtPayload {
   /** User ID (subject) */
   sub: string;
-  /** User email */
-  email: string;
-  /** Role names assigned to the user */
-  roles: string[];
-  /** Issued-at timestamp (set by JwtModule) */
+  /** Role names — standard claim for RBAC */
+  roles?: string[];
+  /** Issued-at timestamp */
   iat?: number;
-  /** Expiry timestamp (set by JwtModule) */
+  /** Expiry timestamp */
   exp?: number;
+  /** Any additional claims present in the token */
+  [key: string]: unknown;
 }

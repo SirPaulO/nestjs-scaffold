@@ -1,6 +1,6 @@
 # modules/auth/ — Authentication
 
-JWT-based authentication using Passport.js.
+JWT verification using Passport.js. Validates Bearer tokens and populates `req.user` with the decoded payload.
 
 ---
 
@@ -9,38 +9,21 @@ JWT-based authentication using Passport.js.
 ```
 auth/
 ├── guards/
-│   └── jwt-auth.guard.ts     # Global guard; respects @Public() routes
+│   └── jwt-auth.guard.ts          # Global guard; respects @Public() routes
 ├── interfaces/
-│   ├── jwt-payload.interface.ts   # Shape of the JWT payload / req.user
-│   └── auth-tokens.interface.ts   # Login response shape
+│   └── jwt-payload.interface.ts   # Shape of the decoded JWT / req.user
 ├── strategies/
-│   ├── jwt.strategy.ts        # Validates Bearer token; populates req.user
-│   └── local.strategy.ts      # Validates email + password; delegates to AuthService
-├── auth.controller.ts         # POST /auth/login
-├── auth.module.ts
-└── auth.service.ts            # validateUser() stub — wire up User entity here
+│   └── jwt.strategy.ts            # Validates Bearer token; populates req.user
+└── auth.module.ts
 ```
 
 ---
 
 ## How It Works
 
-1. **Login** (`POST /auth/login`): `LocalStrategy` calls `AuthService.validateUser`.
-   On success Passport sets `req.user`; controller calls `AuthService.login` to issue JWT.
-2. **Protected routes**: `JwtStrategy` validates the Bearer token and attaches the
-   decoded `JwtPayload` to `req.user`.
-3. **Public routes**: Decorate with `@Public()` to skip JWT verification.
-4. **Role-based access**: Decorate with `@Roles('admin')` and apply `RolesGuard`.
-
----
-
-## Wiring AuthService
-
-`auth.service.ts` contains stubs. To complete the implementation:
-1. Create a `User` entity extending `BaseEntity`.
-2. Inject `UsersService` (or the TypeORM repository) into `AuthService`.
-3. Implement `validateUser(email, password)` using `bcrypt.compare`.
-4. Optionally add `register(dto)` and refresh-token logic.
+1. **Protected routes**: `JwtStrategy` validates the Bearer token and attaches the decoded `JwtPayload` to `req.user`.
+2. **Public routes**: Decorate with `@Public()` to skip JWT verification.
+3. **Role-based access**: Decorate with `@Roles('admin')` and apply `RolesGuard`.
 
 ---
 
@@ -59,10 +42,11 @@ providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }]
 
 ```typescript
 interface JwtPayload {
-  sub: string;     // user ID
-  email: string;
-  roles: string[]; // e.g. ['admin', 'user']
+  sub: string;       // user ID — always present
+  iat?: number;
+  exp?: number;
+  [key: string]: unknown; // any additional claims from the token
 }
 ```
 
-Extend `roles` or add claims to suit your domain.
+The strategy only validates that `sub` is present. All other claims are passed through as-is.
