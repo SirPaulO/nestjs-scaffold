@@ -7,6 +7,7 @@ import { databaseConfig, cacheConfig } from './config';
 import { CacheModule } from './modules/cache/cache.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { InternalModule } from './modules/internal/internal.module';
+import { AppController } from './app.controller';
 
 @Module({
   providers: [
@@ -31,5 +32,6 @@ import { InternalModule } from './modules/internal/internal.module';
     InternalModule,
     // Add feature modules here
   ],
+  controllers: [AppController],
 })
 export class AppModule {}
