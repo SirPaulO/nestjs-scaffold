@@ -2,7 +2,9 @@
 
 ## Overview
 Generic NestJS 11 + TypeScript 5 backend scaffold.
-Stack: Node 20, NestJS 11, TypeORM 0.3, PostgreSQL 18, Valkey 7 (Redis-compatible).
+Stack: Node 24 LTS, NestJS 11, TypeORM 0.3, PostgreSQL 18, Valkey 7 (Redis-compatible).
+
+Coding standards, patterns & architecture: see **`CODING_STANDARDS.md`** — read it before developing or reviewing code.
 
 Update or create any AGENTS.md file as needed to reflect new or modified code, features, routes, and architecture.
 
@@ -116,12 +118,21 @@ docs(scope): description
 
 ### Commit Signing
 
-Always sign commits with SSH key.
+All commits are **SSH-signed** with the `id_ed25519_tavolai` key. The `load.sh` script starts an
+ssh-agent, adds that key, and exports `SSH_AUTH_SOCK` / `SSH_AGENT_PID` (plus `SSH_ASKPASS`).
 
-To load key you must execute this
+**Source** the script (don't `eval` it) so the exports land in your current shell:
 
 ```bash
-eval $(../load.sh)
+source /home/sirpaul/Documents/load.sh
+```
+
+**For AI agents / non-interactive shells:** each command runs in a *fresh* shell — the loaded agent and
+its env vars do **not** persist between separate tool calls. Source the script and commit in the **same**
+invocation, chained with `&&`:
+
+```bash
+source ~/Documents/load.sh && git commit -S -m "feat(scope): message"
 ```
 
 ---

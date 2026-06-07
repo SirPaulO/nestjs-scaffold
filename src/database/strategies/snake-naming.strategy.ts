@@ -67,9 +67,9 @@ export class SnakeNamingStrategy
   joinTableName(
     firstTableName: string,
     secondTableName: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _firstPropertyName: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _secondPropertyName: string,
   ): string {
     return snakeCase(firstTableName + '_' + secondTableName);
@@ -107,7 +107,7 @@ export class SnakeNamingStrategy
    */
   primaryKeyName(
     tableOrName: Table | string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _columnNames: string[],
   ): string {
     const tableName =
@@ -133,7 +133,7 @@ export class SnakeNamingStrategy
   indexName(
     tableOrName: Table | string,
     columnNames: string[],
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _where?: string,
   ): string {
     const tableName =
@@ -147,9 +147,9 @@ export class SnakeNamingStrategy
   foreignKeyName(
     tableOrName: Table | string,
     columnNames: string[],
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _referencedTablePath?: string,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _referencedColumnNames?: string[],
   ): string {
     const tableName =

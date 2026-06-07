@@ -92,7 +92,9 @@ async function bootstrap(): Promise<void> {
   setupDoc(app);
 
   await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
-  process.stdout.write(`Application is running on: http://localhost:${process.env.PORT ?? 3000}\n`);
+  process.stdout.write(
+    `Application is running on: http://localhost:${process.env.PORT ?? 3000}\n`,
+  );
 }
 
 bootstrap().catch((error: unknown) => {

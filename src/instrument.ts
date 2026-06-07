@@ -7,7 +7,8 @@ import * as Sentry from '@sentry/nestjs';
 import { consoleLoggingIntegration, nestIntegration } from '@sentry/nestjs';
 
 Sentry.init({
-  dsn: process.env.NODE_ENV === 'development' ? undefined : process.env.SENTRY_DSN,
+  dsn:
+    process.env.NODE_ENV === 'development' ? undefined : process.env.SENTRY_DSN,
   environment: process.env.SENTRY_ENVIRONMENT ?? 'production',
   release: process.env.SENTRY_RELEASE,
   sendDefaultPii: true,

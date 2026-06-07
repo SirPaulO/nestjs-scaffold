@@ -1,4 +1,10 @@
-import { Controller, Get, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiOperation,
   ApiResponse,
@@ -14,9 +20,14 @@ import { ApiKeyGuard } from '@common/guards';
 export class InternalController {
   @Get('health')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Internal health check (requires X-Api-Key header)' })
+  @ApiOperation({
+    summary: 'Internal health check (requires X-Api-Key header)',
+  })
   @ApiResponse({ status: 200, description: 'Service is healthy' })
-  @ApiResponse({ status: 401, description: 'Invalid or missing X-Api-Key header' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or missing X-Api-Key header',
+  })
   health(): { status: string } {
     return { status: 'ok' };
   }
