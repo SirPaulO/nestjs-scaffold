@@ -8,8 +8,16 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm i
+# Mount the token from the host environment safely into npm's configuration
+RUN --mount=type=secret,id=NPM_TOKEN \
+    # 1. Point your scope at the GitHub Packages npm registry
+    npm config set @tavolai:registry https://npm.pkg.github.com && \
+    # 2. Set the auth token for that registry
+    npm config set "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/NPM_TOKEN)" && \
+    # 3. Install
+    npm i && \
+    # 4. Remove the token from .npmrc within this layer
+    npm config delete //npm.pkg.github.com/:_authToken
 
 # Copy source code
 COPY . .
@@ -25,8 +33,16 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm i
+# Mount the token from the host environment safely into npm's configuration
+RUN --mount=type=secret,id=NPM_TOKEN \
+    # 1. Point your scope at the GitHub Packages npm registry
+    npm config set @tavolai:registry https://npm.pkg.github.com && \
+    # 2. Set the auth token for that registry
+    npm config set "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/NPM_TOKEN)" && \
+    # 3. Install
+    npm i && \
+    # 4. Remove the token from .npmrc within this layer
+    npm config delete //npm.pkg.github.com/:_authToken
 
 # Copy source code
 COPY . .
