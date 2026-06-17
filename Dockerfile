@@ -50,8 +50,14 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Remove development dependencies
-RUN npm prune --production
+# Remove development dependencies.
+# prune reifies the dependency tree and must read @tavolai/contracts metadata
+# from GitHub Packages, so re-supply the auth token (the registry scope set
+# above persists in /root/.npmrc; only the token was deleted after install).
+RUN --mount=type=secret,id=NPM_TOKEN \
+    npm config set "//npm.pkg.github.com/:_authToken=$(cat /run/secrets/NPM_TOKEN)" && \
+    npm prune --omit=dev && \
+    npm config delete //npm.pkg.github.com/:_authToken
 
 # Production stage
 FROM node:24-alpine AS production
