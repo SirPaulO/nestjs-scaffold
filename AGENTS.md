@@ -21,6 +21,11 @@ src/
 ├── config/           # Config factories (see config/AGENTS.md)
 ├── database/         # TypeORM entities, migrations, seeds (see database/AGENTS.md)
 └── main.ts
+
+test/                 # ALL tests live here — NO *.spec.ts in src/ (see Testing)
+├── modules/…/*.spec.ts  # Unit specs, mirroring the src/ tree (same relative path)
+├── jest-e2e.json    # E2E jest config
+└── *.e2e-spec.ts    # E2E specs
 ```
 
 ---
@@ -96,6 +101,13 @@ npm run db:seed                # Seed database (create src/database/seeds/seed.t
 - **Minimum coverage**: 80% overall, 100% for auth and critical paths
 - Pattern: `Arrange → Act → Assert` inside `describe('ServiceName') > describe('methodName')`
 - Unit tests mock all external dependencies
+- **Spec location**: every `*.spec.ts` lives under `test/`, mirroring the `src/` tree
+  (`src/modules/foo/foo.service.ts` → `test/modules/foo/foo.service.spec.ts`). Do **NOT**
+  co-locate specs next to source. Jest `roots` is `["<rootDir>/test"]`, `testRegex: .*\.spec\.ts$`,
+  coverage measured from `src/**`.
+- **Subject imports**: from a spec, import the code under test (and any other `src` code) via the
+  `@modules/` / `@common/` / `@config/` / `@database/` path aliases (jest `moduleNameMapper` +
+  `tsconfig` `paths`), never relative `../../src/...` paths.
 - E2E tests live in `test/` and use `jest-e2e.json`
 
 ---
