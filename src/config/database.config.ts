@@ -1,7 +1,12 @@
+import { config as loadEnv } from 'dotenv';
 import { registerAs } from '@nestjs/config';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import { SnakeNamingStrategy } from '../database/strategies/snake-naming.strategy';
+
+// The TypeORM CLI (migration:generate/run) bootstraps this file directly,
+// outside Nest's ConfigModule, so load `.env` here for the CLI DataSource.
+loadEnv();
 
 /**
  * Database configuration for TypeORM
