@@ -3,8 +3,8 @@
 > **Read this before writing code or reviewing a PR in this repository.**
 > It defines the coding conventions, patterns, folder structure, and architecture every change must follow.
 >
-> This repo (`backend-skeleton`) is the **canonical reference**. New services are cloned from it; the three
-> sibling services (`assistant`, `backend`, `notifications`) carry the *same* Part 1 and their own Part 2.
+> This repo (`backend-skeleton`) is the **canonical reference** that new services are cloned from.
+> Part 1 below is the shared standard; Part 2 is specific to this service.
 
 ---
 

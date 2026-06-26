@@ -1,12 +1,6 @@
 # Backend Standards
 
-> **Source of truth** for how every backend service in the platform is structured, configured, and developed.
-> `backend-skeleton` is the **canonical reference implementation** — when in doubt, match the skeleton.
-> New services are created by cloning `backend-skeleton`. Existing services (`assistant`, `backend`, `notifications`)
-> must converge on these standards; see the [Remediation Plan](#remediation-plan) at the end.
-
-This document was derived by reviewing the four current repos (`assistant`, `backend`, `notifications`, `backend-skeleton`).
-It captures the **intended** standard plus the concrete drift found per repo.
+> **Source of truth** for how a backend service in this platform is structured, configured, and developed.
 
 ---
 
@@ -14,11 +8,11 @@ It captures the **intended** standard plus the concrete drift found per repo.
 
 | Category | Standard | Notes |
 |----------|----------|-------|
-| Runtime | **Node.js 24 LTS** | `.nvmrc` → `v24.13.1`; Dockerfile `node:24-alpine`; CI `node-version: '24'`. All three must agree. |
-| Framework | **NestJS 11.x** | `@nestjs/*` `^11.0.0`. Some `AGENTS.md` still say "10.x" — stale. |
+| Runtime | **Node.js 24 LTS** | `.nvmrc` → `v24.13.1`; Dockerfile `node:24-alpine`; CI `node-version: '24'`. |
+| Framework | **NestJS 11.x** | `@nestjs/*` `^11.0.0`. |
 | Language | **TypeScript 5.7.x** | strict mode, see §4. |
 | ORM | **TypeORM 0.3.x** | with `SnakeNamingStrategy`. |
-| Database | **PostgreSQL 18** (`postgres:18-alpine`) | `backend` AGENTS.md says 15.x — stale. |
+| Database | **PostgreSQL 18** (`postgres:18-alpine`) | |
 | Cache / Queue | **Valkey 7** (Redis-compatible) via `ioredis` + `cache-manager` | |
 | Validation | `class-validator` + `class-transformer` | on every DTO. |
 | Auth | `@nestjs/passport` + `passport-jwt` + `@nestjs/jwt` | JWT bearer. |
@@ -52,8 +46,8 @@ It captures the **intended** standard plus the concrete drift found per repo.
 | `pg` | `^8.21.0` | |
 | `cache-manager` | `^7.2.8` | |
 | `husky` | `^9.1.7` | unchanged |
-| `@commitlint/cli` + `config-conventional` | `^21.0.2` | **add** to all repos |
-| `zod` | per-repo major (backend 4.x, others 3.x latest) | unification 3→4 deferred |
+| `@commitlint/cli` + `config-conventional` | `^21.0.2` | required |
+| `zod` | 3.x or 4.x latest-in-major | unification 3→4 deferred |
 
 ---
 
@@ -94,7 +88,7 @@ Every service has this top-level shape:
 
 ```
 src/
-├── main.ts               # bootstrap (see canonical version in skeleton)
+├── main.ts               # bootstrap (see §8)
 ├── instrument.ts         # Sentry init — MUST be the first import in main.ts
 ├── app.module.ts         # root module: Sentry, Config, TypeORM, feature modules
 ├── app.controller.ts     # root/health controller
@@ -142,7 +136,7 @@ Configured in **three places that must stay in sync**: `tsconfig.json` `paths`, 
 
 ## 4. TypeScript Standards
 
-`tsconfig.json` (canonical = skeleton):
+`tsconfig.json` (canonical):
 - `module: commonjs`, `target: ES2023`, `moduleResolution: node`
 - `strict: true` plus explicitly: `strictNullChecks`, `noImplicitAny`, `strictBindCallApply`,
   `noFallthroughCasesInSwitch`, `noImplicitReturns`, `noUnusedLocals`, `noUnusedParameters`
@@ -171,16 +165,15 @@ Coding rules (from `AGENTS.md`, unified):
 ## 5. Lint & Format
 
 **ESLint** — flat config (`eslint.config.mjs`), `typescript-eslint` type-checked.
-Canonical rule set (identical across repos; `backend` adds one file-scoped override):
+Canonical rule set:
 
 Production `**/*.ts` (errors): `no-explicit-any`, `no-floating-promises`, `no-unsafe-*`
 (argument/assignment/call/member-access/return), `prefer-nullish-coalescing`,
 `prefer-optional-chain`, `require-await`, `no-unused-vars` (`argsIgnorePattern: '^_'`),
 `prettier/prettier`.
 
-Test `**/*.spec.ts` / `**/test/**`: `no-explicit-any` off; `no-unsafe-*` relaxed to **warn**
-(`backend` turns them fully **off** — acceptable variant); `prefer-*` off; `require-await` &
-`no-unused-vars` stay error.
+Test `**/*.spec.ts` / `**/test/**`: `no-explicit-any` off; `no-unsafe-*` relaxed to **warn**;
+`prefer-*` off; `require-await` & `no-unused-vars` stay error.
 
 **Prettier** (`.prettierrc`, identical everywhere — keep it that way):
 ```json
@@ -200,7 +193,7 @@ Commands: `npm run lint` (check) · `npm run format` (eslint --fix + prettier --
 - **Migrations/seeds/factories excluded** from coverage (`coveragePathIgnorePatterns`).
 - **Spec location:** specs live under `test/`, mirroring the `src/` tree, importing the subject by
   relative path (e.g. `test/modules/foo/foo.service.spec.ts`). **Do not** place `*.spec.ts` next to
-  source. (`assistant` & `backend` enforce this via jest `roots: ['<rootDir>/test']` — adopt everywhere.)
+  source. Enforce via jest `roots: ['<rootDir>/test']`.
 - **E2E:** `npm run test:e2e` using `test/jest-e2e.json`.
 - **Pattern:** Arrange → Act → Assert inside `describe('ServiceName') > describe('methodName') > it('should … when …')`.
   Mock all external dependencies; test success and failure paths.
@@ -213,7 +206,7 @@ Commands: `npm run lint` (check) · `npm run format` (eslint --fix + prettier --
 ### Conventional Commits
 `feat(scope): …`, `fix(scope): …`, `test(scope): …`, `docs(scope): …`, `refactor`, `chore`.
 Branches: `feature/…`, `fix/…`, `hotfix/…`, `refactor/…`.
-**`backend` enforces this with `commitlint` + `@commitlint/config-conventional`** — adopt repo-wide.
+Enforce with `commitlint` + `@commitlint/config-conventional`.
 
 ### Commit signing (required)
 All commits are SSH-signed. Load the key before committing:
@@ -227,21 +220,18 @@ eval $(../load.sh)
 npm install
 npm run verify          # lint + build + jest --coverage
 ```
-> `assistant` currently runs `lint` + `format` instead of `verify` — `format` **mutates files during
-> commit** and skips build/tests. Replace with `verify`.
 
 ### `npm run verify`
 `npm run lint && npm run build && jest --coverage` — the single **Definition of Done** gate.
 
 ### GitHub Actions
-- `ci.yml` — on PR to `main`: checkout → setup-node (Node 22, npm cache) → `npm ci` →
-  `npm run lint` → `npm run build` → `npm test`. (Pass any required build-time env via `vars`/`secrets`,
-  as `assistant` does for `SYSTEM_PROMPT_TEMPLATE`.)
+- `ci.yml` — on PR to `main`: checkout → setup-node (npm cache) → `npm ci` →
+  `npm run lint` → `npm run build` → `npm test`. (Pass any required build-time env via `vars`/`secrets`.)
 - `sentry-sourcemaps.yml` — uploads source maps on release.
 
 ---
 
-## 8. Architectural Patterns (canonical, from skeleton)
+## 8. Architectural Patterns (canonical)
 
 - **Bootstrap (`main.ts`):** `import './instrument'` first; create app with `rawBody: true` and
   env-driven `LOG_LEVEL`; global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true,
@@ -266,9 +256,9 @@ npm run verify          # lint + build + jest --coverage
 - **Cache:** `CacheModule` + `CacheService` over `cache-manager` + ioredis; `CachePrefix`/`CacheTTL`
   enums, `buildKey`, `getOrSet` (cache-aside), `delPattern`, `incr`/`decr`. Invalidate on writes.
 - **Swagger:** `introspectComments: true` (nest-cli plugin); bearer (`JWT-auth`) + api-key security schemes.
-- **Multi-tenancy / RBAC / queues** (in `backend`): tenant resolved per request via guard;
+- **Multi-tenancy / RBAC / queues** (opt-in): tenant resolved per request via guard;
   roles/permissions in DB checked by guards + `@Roles()`/`@Permissions()`; Bull queues on Valkey.
-  These are **opt-in** per service, not part of the base skeleton.
+  These are **opt-in** per service.
 
 ---
 
@@ -280,16 +270,15 @@ npm run verify          # lint + build + jest --coverage
   `tracesSampleRate` from `SENTRY_TRACES_SAMPLE_RATE` (lower in prod); `pg`/`ioredis`/TypeORM/OpenAI auto-instrumented.
 - `app.module.ts` registers `SentryModule.forRoot()` + `SentryGlobalFilter` (as `APP_FILTER`).
 - Source maps: `build:prod` runs `sentry:sourcemaps` (inject + upload) per `--project <name>`.
-  **Each service must use its own Sentry project name** (`tavolai-ai`, `tavolai-backend`, `tavolai-notifications`, …).
-  `tavolai-skeleton` is a placeholder for new clones to rename.
+  **Each service must use its own Sentry project name** (e.g. `tavolai-<service>`); a cloned
+  placeholder project name must be renamed on service creation.
 
 ---
 
 ## 10. Documentation Standard (`AGENTS.md` / `CLAUDE.md`)
 
-- **`CLAUDE.md` is a thin pointer:** its entire content is `@AGENTS.md`.
-  (`assistant` deviates with a large inline CLAUDE.md — its rich architecture notes should live in
-  `AGENTS.md` / module `AGENTS.md`, leaving `CLAUDE.md` as the pointer.)
+- **`CLAUDE.md` is a thin pointer:** its entire content is `@AGENTS.md`. Rich architecture notes
+  belong in `AGENTS.md` and module-level `AGENTS.md` files, not inline in `CLAUDE.md`.
 - **`AGENTS.md`** is the technical reference: overview, stack table, project structure, architecture &
   patterns, Definition of Done, local dev, standards, testing, git workflow, security, performance.
 - **Module-level `AGENTS.md`** for non-trivial modules, linked from the root `AGENTS.md` table.
@@ -309,77 +298,3 @@ Plus:
 - Adapt tests to the codebase; never weaken production code just to pass a test (unless that change was the task).
 - Update `AGENTS.md` (+ module docs) for architectural/route/behaviour/standard changes.
 - Add every new env var to `.env.example`.
-
----
-
-## Remediation Plan
-
-Convergence work to bring the three existing services onto these standards. Ordered low-risk → higher-risk.
-None of these change runtime behaviour; they align config, hooks, and docs.
-
-### Phase 0 — Platform-wide decisions (do first; blocks the rest)
-1. **Node version locked: Node 24 LTS.** Decision made; see §1.1 Version targets. All repos must set
-   `.nvmrc` → `v24.13.1`, Dockerfile base → `node:24-alpine`, CI `node-version` → `'24'`, and update
-   every `AGENTS.md` stack table accordingly.
-2. **Canonical versions confirmed** in the stack table (NestJS 11, PostgreSQL 18); stale `AGENTS.md`
-   entries corrected in each repo during Phases 1–4.
-
-### Phase 1 — `backend-skeleton` (make the reference clean)
-- Promote the items the other repos do better **into** the skeleton so clones inherit them:
-  - `commitlint` + `@commitlint/config-conventional` + `commitlint.config.js` (from `backend`).
-  - jest `roots: ['<rootDir>/test']` + the spec-mirrors-`src/` convention (from `assistant`/`backend`).
-  - `tsconfig.json`: settle one form (skeleton has `baseUrl`/`moduleResolution`; `assistant`/`backend`
-    add `rootDir: ./src` + `include`). Pick the skeleton's as canonical and document it.
-- Rename the skeleton's Sentry project placeholder and `package.json name` handling so a new clone has a
-  clear "rename these" checklist (Sentry project, `package.json` `name`, docker container names).
-- Add a short **"Creating a new service"** section to the README pointing at this file.
-
-### Phase 2 — `notifications` (closest to skeleton; copy-paste leftovers)
-- `package.json`: `sentry:sourcemaps` project is `tavolai-skeleton` → change to `tavolai-notifications`.
-- `AGENTS.md` header says "Backend Skeleton — Technical Reference" → retitle to Notifications and
-  describe its real modules (FCM/web-push, channels, subscriptions). PostgreSQL/Node rows per Phase 0.
-- jest `collectCoverageFrom` is narrowed to the notifications module only — widen to `src/**` (matching
-  the 80% global gate) or document why it's scoped.
-- Remove the stray `*:Zone.Identifier` files (`.husky/pre-commit:Zone.Identifier`, `.github/workflows/*:Zone.Identifier`) — WSL download artifacts.
-- Confirm `CLAUDE.md` is the `@AGENTS.md` pointer (it is) — no change.
-
-### Phase 3 — `assistant` (most drift)
-- **Husky:** replace `npm run lint && npm run format` with `npm install && npm run verify` (current hook
-  mutates files mid-commit and skips build/tests).
-- **CLAUDE.md:** large inline doc → reduce to `@AGENTS.md`; migrate the detailed architecture/Flows/i18n
-  notes into `AGENTS.md` and module-level `AGENTS.md` files (`flows/`, `conversations/`, `customers/`, i18n).
-- **AGENTS.md:** fix title typo ("Conversation Eengine"), update stack rows (NestJS 11 not 10, Node per Phase 0).
-- **jest:** uses `ts-jest` `diagnostics: false` — confirm intentional or align with skeleton.
-- Add `commitlint` (Phase 1) and `modules/internal` health endpoint if not present.
-
-### Phase 4 — `backend` (largest; mostly fine)
-- **AGENTS.md stack table:** NestJS `10.x`→`11.x`, PostgreSQL `15.x`→`18.x`, Node per Phase 0.
-- Keep its `commitlint`, `forceExit` jest, and the `cache.service` eslint override (justified) — fold the
-  good parts upstream into the skeleton (Phase 1) rather than removing them here.
-- Verify `CLAUDE.md` pointer (it is `@AGENTS.md`) — no change.
-
-### Phase 5 — Verify & lock in
-- Run `npm run verify` in each repo after changes; fix fallout.
-- Add a tiny CI/lint check (or doc note) asserting `.nvmrc` ↔ CI ↔ Dockerfile Node versions match, so
-  drift can't silently return.
-- Tag this file as the source of truth in each repo's `AGENTS.md` ("Standards: see backend-skeleton/.ai/standards.md").
-
-### Drift matrix (quick reference) — post-remediation
-
-> Resolved by the standards rollout (see `standards-rollout-plan.md`). All rows now ✅.
-
-| Item | skeleton | notifications | assistant | backend |
-|------|----------|---------------|-----------|---------|
-| CLAUDE.md = `@AGENTS.md` | ✅ | ✅ | ✅ | ✅ |
-| pre-commit = `verify` | ✅ | ✅ | ✅ | ✅ |
-| commitlint enforced | ✅ | ✅ | ✅ | ✅ |
-| jest `roots: [test]` | ✅ | ✅ | ✅ | ✅ |
-| coverage scope `src/**` | ✅ | ✅ | ✅ | ✅ |
-| Sentry project name | ✅ (`tavolai-skeleton`) | ✅ (`tavolai-notifications`) | ✅ | ✅ |
-| Stack table accurate | ✅ | ✅ | ✅ | ✅ |
-| Zone.Identifier cruft | clean | clean | clean | clean |
-| `modules/internal` | ✅ | ✅ | ✅ | ✅ (own) |
-| Node 24 (.nvmrc/Docker/CI) | ✅ | ✅ | ✅ | ✅ |
-
-**One optional Phase 5 item deferred:** an automated `.nvmrc ↔ CI ↔ Dockerfile` Node-version consistency
-check (currently kept in sync manually). Add as a small CI step later if drift recurs.
