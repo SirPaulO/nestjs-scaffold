@@ -9,27 +9,5 @@ permissions:
 
 jobs:
   ci:
-    name: Lint, Build & Test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm i
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
+    uses: SirPaulO/tavolai-contracts/.github/workflows/reusable-node-ci.yml@main
+    secrets: inherit
