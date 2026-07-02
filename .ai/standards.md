@@ -48,6 +48,8 @@
 | `husky` | `^9.1.7` | unchanged |
 | `@commitlint/cli` + `config-conventional` | `^21.0.2` | required |
 | `zod` | 3.x or 4.x latest-in-major | unification 3→4 deferred |
+| `helmet` | `^8.2.0` | applied as global Express middleware in `main.ts` |
+| `@nestjs/throttler` | `^6.5.0` | global rate limiting (`ThrottlerGuard` as `APP_GUARD`), driven by `RATE_LIMIT_TTL`/`RATE_LIMIT_MAX` |
 
 ---
 
@@ -234,31 +236,48 @@ npm run verify          # lint + build + jest --coverage
 ## 8. Architectural Patterns (canonical)
 
 - **Bootstrap (`main.ts`):** `import './instrument'` first; create app with `rawBody: true` and
-  env-driven `LOG_LEVEL`; global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true,
-  transform: true, errorHttpStatusCode: 422 })`; global `HttpExceptionFilter`; CORS from
-  `CORS_ORIGIN` (comma list, `*` wildcard → regex); Swagger gated by `ENABLE_DOCS`; listen on
-  `0.0.0.0:${PORT|3000}`.
+  env-driven `LOG_LEVEL`; `helmet()` global middleware; global `ValidationPipe({ whitelist: true,
+  forbidNonWhitelisted: true, transform: true, errorHttpStatusCode: 422 })`; global
+  `HttpExceptionFilter`; CORS from `CORS_ORIGIN` (comma list, `*` wildcard → regex) — **fail-closed:
+  throws at boot if `CORS_ORIGIN` is unset**, never falls back to an unrestricted `origin: '*'`
+  (which combined with `credentials: true` is a real vulnerability); Swagger gated by
+  `ENABLE_DOCS`; listen on `0.0.0.0:${PORT|3000}`.
 - **Config:** `@nestjs/config` `registerAs()` factories in `src/config`, loaded in `app.module.ts`
   via `ConfigModule.forRoot({ isGlobal: true, load: [...] })`. **Never read `process.env` in business
-  logic** — inject `ConfigService` or a typed config (exception: `main.ts`/`instrument.ts` bootstrap).
+  logic** — inject `ConfigService` or a typed config (exception: `main.ts`/`instrument.ts` bootstrap,
+  and the config factories themselves).
 - **Database:** `databaseConfig` registerAs returns `TypeOrmModuleOptions`; a separate exported
   `dataSource` (same options) drives the TypeORM CLI for migrations. `SnakeNamingStrategy` maps
   camelCase entities → snake_case columns. All entities extend `BaseEntity` (uuid `id`,
   `createdAt`/`updatedAt`/`deletedAt` as `timestamptz`, soft-delete). Pool tuning via `DATABASE_POOL_*`.
+  **No weak default credentials** — throws at boot if `DATABASE_USERNAME`/`PASSWORD`/`NAME` are
+  unset. `DATABASE_SSL=true` verifies certificates by default (`rejectUnauthorized: true`); a
+  custom CA is `DATABASE_SSL_CA`; disabling verification is an explicit opt-out
+  (`DATABASE_SSL_REJECT_UNAUTHORIZED=false`), never the default.
 - **Errors:** global `HttpExceptionFilter` returns a consistent shape
   `{ statusCode, message, error, errorCode, details }`, with `AppErrorCode` enum, debug-gated
-  messages (`APP_DEBUG` / `X-Debug-Mode` non-prod), vague 403s, and class-validator extraction.
-  Use NestJS built-in exceptions (`NotFoundException`, `BadRequestException`, …).
-- **Internal endpoints:** `modules/internal` — `ApiKeyGuard` (`X-Api-Key` vs `SYSTEM_API_KEYS`
-  comma list), `@ApiSecurity('api-key')`, e.g. `GET /internal/health`.
+  messages (`APP_DEBUG` / `X-Debug-Mode`, gated behind `NODE_ENV !== 'production'` — never verbose
+  in prod regardless of either knob), vague 403s, and class-validator extraction. Use NestJS
+  built-in exceptions (`NotFoundException`, `BadRequestException`, …).
+- **Internal endpoints:** `modules/internal` — marked `@Public()` (opts out of the global JWT
+  guard) and guarded by `ApiKeyGuard` (`X-Api-Key` vs `SYSTEM_API_KEYS` comma list, compared in
+  constant time via `crypto.timingSafeEqual` over SHA-256 digests, fail-closed if unset),
+  `@ApiSecurity('api-key')`, e.g. `GET /internal/health`.
 - **Auth:** `AuthModule` registers Passport JWT + `JwtModule` (secret + `JWT_EXPIRATION`);
-  `JwtStrategy`, `JwtAuthGuard`, `@Public()` decorator to opt out.
+  `JwtStrategy` (fails closed at boot if `JWT_SECRET` is unset), `JwtAuthGuard` registered as a
+  **global `APP_GUARD`** (deny-by-default), `@Public()` decorator to opt a route/controller out.
+- **Rate limiting:** `@nestjs/throttler`'s `ThrottlerGuard` is a second global `APP_GUARD`
+  (registered ahead of `JwtAuthGuard` so it also throttles unauthenticated/invalid requests),
+  driven by `RATE_LIMIT_TTL`/`RATE_LIMIT_MAX` via `rateLimitConfig`.
 - **Cache:** `CacheModule` + `CacheService` over `cache-manager` + ioredis; `CachePrefix`/`CacheTTL`
-  enums, `buildKey`, `getOrSet` (cache-aside), `delPattern`, `incr`/`decr`. Invalidate on writes.
+  enums, `buildKey`, `getOrSet` (cache-aside), `delPattern` (via `SCAN`, never blocking `KEYS`),
+  `incr`/`decr` (atomic `INCRBY`, throws rather than falling back to a racy get-then-set).
+  Invalidate on writes.
 - **Swagger:** `introspectComments: true` (nest-cli plugin); bearer (`JWT-auth`) + api-key security schemes.
 - **Multi-tenancy / RBAC / queues** (opt-in): tenant resolved per request via guard;
   roles/permissions in DB checked by guards + `@Roles()`/`@Permissions()`; Bull queues on Valkey.
-  These are **opt-in** per service.
+  These are **opt-in** per service (unlike the JWT/rate-limit/helmet baseline above, which ships
+  wired by default in every clone).
 
 ---
 
@@ -268,6 +287,10 @@ npm run verify          # lint + build + jest --coverage
   so it can patch `http`/`pg`/`ioredis`/`openai`/etc.
 - DSN disabled in `development`; `enableLogs: true` bridges NestJS `Logger` → Sentry Logs;
   `tracesSampleRate` from `SENTRY_TRACES_SAMPLE_RATE` (lower in prod); `pg`/`ioredis`/TypeORM/OpenAI auto-instrumented.
+- **`sendDefaultPii: false` by default** (opt in per-service via `SENTRY_SEND_DEFAULT_PII=true`
+  only if genuinely needed). `beforeSend`/`beforeSendLog` recursively scrub
+  Authorization/Cookie/X-Api-Key headers and token/secret/password-shaped fields from every
+  event, log, extra/context payload, and breadcrumb before it leaves the process.
 - `app.module.ts` registers `SentryModule.forRoot()` + `SentryGlobalFilter` (as `APP_FILTER`).
 - Source maps: `build:prod` runs `sentry:sourcemaps` (inject + upload) per `--project <name>`.
   **Each service must use its own Sentry project name** (e.g. `tavolai-<service>`); a cloned

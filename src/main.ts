@@ -4,21 +4,37 @@ import './instrument';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, HttpStatus, INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@common/filters';
 
+/**
+ * Builds the CORS origin allow-list from `CORS_ORIGIN`.
+ *
+ * Fails CLOSED: if the variable is unset/empty we refuse to boot rather than
+ * fall back to `origin: '*'` — an unrestricted policy combined with
+ * `credentials: true` would let any site make credentialed requests.
+ * Every clone of this skeleton must set `CORS_ORIGIN` explicitly.
+ */
 function setupCors(app: INestApplication): void {
-  const corsOrigins =
-    process.env.CORS_ORIGIN?.split(',').map((o) => {
-      const trimmed = o.trim();
-      if (trimmed.includes('*')) {
-        const escaped = trimmed
-          .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-          .replace(/\*/g, '.*');
-        return new RegExp(`^${escaped}$`);
-      }
-      return trimmed;
-    }) ?? '*';
+  const rawOrigins = process.env.CORS_ORIGIN?.trim();
+  if (!rawOrigins) {
+    throw new Error(
+      'CORS_ORIGIN must be set to a comma-separated list of allowed origins. ' +
+        'Refusing to start with an unrestricted CORS policy (fail-closed default).',
+    );
+  }
+
+  const corsOrigins = rawOrigins.split(',').map((o) => {
+    const trimmed = o.trim();
+    if (trimmed.includes('*')) {
+      const escaped = trimmed
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*');
+      return new RegExp(`^${escaped}$`);
+    }
+    return trimmed;
+  });
 
   app.enableCors({
     origin: corsOrigins,
@@ -76,6 +92,8 @@ async function bootstrap(): Promise<void> {
     rawBody: true,
     logger: logLevels,
   });
+
+  app.use(helmet());
 
   app.useGlobalPipes(
     new ValidationPipe({

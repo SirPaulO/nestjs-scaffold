@@ -18,6 +18,7 @@ common/
 ├── filters/
 │   └── http-exception.filter.ts  # Global error filter (consistent JSON shape)
 ├── guards/
+│   ├── api-key.guard.ts      # X-Api-Key vs SYSTEM_API_KEYS, constant-time compare
 │   └── roles.guard.ts        # Enforces @Roles() metadata
 └── validators/               # Custom class-validator decorators
     ├── is-future-date.validator.ts
@@ -45,12 +46,20 @@ Debug mode (APP_DEBUG=true or X-Debug-Mode header in non-prod) expands messages 
 
 ---
 
-## Adding Guards Globally
+## Global Guards (already wired in AppModule)
 
-Register `JwtAuthGuard` or `RolesGuard` as global guards in `AppModule`:
+`AppModule` registers two global `APP_GUARD`s, in this order:
 ```typescript
-{ provide: APP_GUARD, useClass: JwtAuthGuard }
+{ provide: APP_GUARD, useClass: ThrottlerGuard }, // rate-limit first — applies even to bad auth
+{ provide: APP_GUARD, useClass: JwtAuthGuard },   // deny by default; @Public() opts a route out
 ```
+Every route requires a valid JWT unless decorated `@Public()`. `RolesGuard` stays **opt-in**:
+apply it (with `@UseGuards(RolesGuard)`) plus `@Roles(...)` on the specific controller/route that
+needs role checks — it is not a global guard, since not every route needs RBAC.
+
+`ApiKeyGuard` (X-Api-Key vs `SYSTEM_API_KEYS`) is separate from both: it's for service-to-service
+routes under `modules/internal`, which mark themselves `@Public()` to opt out of the JWT guard
+while `ApiKeyGuard` still fully guards them.
 
 ---
 

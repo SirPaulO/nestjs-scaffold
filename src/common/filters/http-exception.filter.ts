@@ -31,10 +31,14 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   private isDebugMode(request: Request): boolean {
+    // Verbose error details are never exposed in production, regardless of
+    // APP_DEBUG or the X-Debug-Mode header — both are dev/staging-only knobs.
+    if (process.env.NODE_ENV === 'production') {
+      return false;
+    }
+
     const appDebug = process.env.APP_DEBUG === 'true';
-    const headerDebug =
-      request.headers['x-debug-mode'] === 'true' &&
-      process.env.NODE_ENV !== 'production';
+    const headerDebug = request.headers['x-debug-mode'] === 'true';
     return appDebug || headerDebug;
   }
 
