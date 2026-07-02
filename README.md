@@ -63,9 +63,22 @@ Global caching service with Valkey/Redis support:
 Copy `.env.example` to `.env` and update the values:
 
 - `PORT` - Server port
-- `DATABASE_*` - Database connection settings
-- `CACHE_*` - Cache (Valkey/Redis) connection settings
-- `JWT_SECRET` - JWT signing secret
+- `CORS_ORIGIN` - **required** comma-separated allow-list; the app refuses to boot if unset (no
+  unrestricted `*` fallback)
+- `DATABASE_*` - Database connection settings (`DATABASE_USERNAME`/`PASSWORD`/`NAME` are
+  **required** — no default credentials)
+- `CACHE_*` / `VALKEY_*` - Cache (Valkey/Redis) connection settings
+- `JWT_SECRET` - **required** JWT signing secret
+- `SYSTEM_API_KEYS` - comma-separated keys accepted by `ApiKeyGuard` on `/internal/*` routes
+- `RATE_LIMIT_TTL` / `RATE_LIMIT_MAX` - global rate limit (`@nestjs/throttler`)
+
+## Security Defaults
+
+This skeleton denies by default: every route requires a JWT unless decorated `@Public()`, CORS
+and database credentials fail closed if unconfigured, `helmet()` and global rate limiting are
+already wired, and internal API keys are compared in constant time. See `CODING_STANDARDS.md`
+§9/§14 and `AGENTS.md` → Security Standards for the full list — keep these defaults secure in any
+clone; don't work around them to get a service running faster.
 
 ## Creating a new service
 

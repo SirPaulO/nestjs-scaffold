@@ -11,6 +11,16 @@ Import via `@config/*` path alias.
 |---|---|---|
 | `database.config.ts` | `database` | TypeORM connection, pooling, migrations, snake_case naming |
 | `cache.config.ts` | `cache` | Valkey/Redis host, port, TTL, max entries |
+| `rate-limit.config.ts` | `rateLimit` | `RATE_LIMIT_TTL`/`RATE_LIMIT_MAX` consumed by the global `ThrottlerModule` |
+
+### `database.config.ts` — fail-closed by design
+
+- Throws at import/instantiation if `DATABASE_USERNAME` / `DATABASE_PASSWORD` / `DATABASE_NAME`
+  are unset — there is **no** `?? 'postgres'`-style fallback. Every clone must set real
+  credentials, even locally (see `.env.example`).
+- `DATABASE_SSL=true` verifies certificates by default (`rejectUnauthorized: true`). Supply
+  `DATABASE_SSL_CA` for a custom CA bundle, or set `DATABASE_SSL_REJECT_UNAUTHORIZED=false` only
+  as a deliberate, informed opt-out.
 
 ---
 

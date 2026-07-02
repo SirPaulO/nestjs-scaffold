@@ -20,7 +20,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "verify": "npm run lint && npm run build && jest --coverage --passWithNoTests",
+    "verify": "npm run lint && npm run build && jest --coverage",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm -- migration:generate -d src/config/database.config.ts",
     "migration:create": "npm run typeorm -- migration:create",
@@ -40,6 +40,7 @@
     "@nestjs/passport": "^11.0.0",
     "@nestjs/platform-express": "^11.1.24",
     "@nestjs/swagger": "^11.4.4",
+    "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.1",
     "@sentry/cli": "^3.5.0",
     "@sentry/nestjs": "^10.56.0",
@@ -47,6 +48,7 @@
     "cache-manager-ioredis-yet": "^2.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "helmet": "^8.2.0",
     "ioredis": "^5.11.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
@@ -96,6 +98,9 @@
       "<rootDir>/test"
     ],
     "testRegex": ".*\\.spec\\.ts$",
+    "setupFiles": [
+      "<rootDir>/test/setup-env.ts"
+    ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

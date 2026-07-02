@@ -107,8 +107,16 @@ npm run db:seed                # Seed database (create src/database/seeds/seed.t
   coverage measured from `src/**`.
 - **Subject imports**: from a spec, import the code under test (and any other `src` code) via the
   `@modules/` / `@common/` / `@config/` / `@database/` path aliases (jest `moduleNameMapper` +
-  `tsconfig` `paths`), never relative `../../src/...` paths.
+  `tsconfig` `paths`), never relative `../../src/...` paths. The handful of root-level files
+  (`app.module.ts`, `app.controller.ts`, `instrument.ts`) have no alias — import those via a plain
+  relative path from `test/` (e.g. `../src/app.module`).
 - E2E tests live in `test/` and use `jest-e2e.json`
+- `setupFiles` (`test/setup-env.ts`) seeds baseline env vars (`DATABASE_USERNAME/PASSWORD/NAME`,
+  `JWT_SECRET`, `CORS_ORIGIN`, `SYSTEM_API_KEYS`) before every test file loads, because several
+  config factories now fail closed at import/instantiation time when a required secret is
+  missing. A spec that exercises that fail-closed branch itself overrides/deletes the variable.
+- `npm run verify`'s `jest --coverage` no longer passes `--passWithNoTests` — an empty test suite
+  is a failing Definition of Done, not a silent pass.
 
 ---
 
@@ -152,8 +160,27 @@ source ~/Documents/load.sh && git commit -S -m "feat(scope): message"
 ## Security Standards
 
 - Bcrypt hashing (cost ≥ 12)
-- JWT in Authorization header (Bearer)
-- CORS restricted to configured origins
+- JWT in Authorization header (Bearer). **Every route denies by default** — `JwtAuthGuard` is
+  registered globally (`APP_GUARD` in `app.module.ts`); opt a route out explicitly with
+  `@Public()` (used today by `GET /health` and the whole `InternalController`, which
+  authenticates via `X-Api-Key` instead).
+- Global rate limiting via `@nestjs/throttler` (`ThrottlerGuard` as a second global `APP_GUARD`,
+  ahead of the JWT guard so it also throttles unauthenticated/invalid requests), configured from
+  `RATE_LIMIT_TTL` / `RATE_LIMIT_MAX`.
+- `helmet()` is applied as global middleware in `main.ts`.
+- CORS is **fail-closed**: `main.ts` throws at boot if `CORS_ORIGIN` is unset — there is no
+  fallback to an unrestricted `origin: '*'` (which combined with `credentials: true` would be
+  a real vulnerability, not just a bad default).
+- `ApiKeyGuard` compares `X-Api-Key` in **constant time** (`crypto.timingSafeEqual` over
+  SHA-256 digests of both sides, so length differences never short-circuit the comparison) and
+  fails closed (denies everything) when `SYSTEM_API_KEYS` is unset.
+- Database credentials have **no weak defaults** — `database.config.ts` throws at boot if
+  `DATABASE_USERNAME` / `DATABASE_PASSWORD` / `DATABASE_NAME` are unset. When `DATABASE_SSL=true`,
+  certificates are verified by default (`rejectUnauthorized: true`); disabling verification
+  requires the explicit opt-out `DATABASE_SSL_REJECT_UNAUTHORIZED=false`.
+- Sentry (`instrument.ts`) defaults `sendDefaultPii: false` and scrubs
+  Authorization/Cookie/X-Api-Key headers and token/secret/password-shaped fields from every event
+  and log via `beforeSend`/`beforeSendLog` before anything leaves the process.
 - Never log sensitive data (passwords, tokens, PII)
 - Parameterised queries via TypeORM (no raw string interpolation)
 - Input validation on every DTO via class-validator

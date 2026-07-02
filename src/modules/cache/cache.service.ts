@@ -1,6 +1,7 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
+import type { Redis } from 'ioredis';
 
 /**
  * Cache key prefixes for different data types
@@ -93,29 +94,77 @@ export class CacheService {
   }
 
   /**
-   * Delete multiple keys matching a pattern
+   * Delete multiple keys matching a pattern.
+   *
+   * Uses `SCAN` (via ioredis' `scanStream`) rather than the blocking `KEYS`
+   * command — `KEYS` walks the entire keyspace in one shot and stalls every
+   * other client on the shared Valkey instance while it runs. `SCAN` walks it
+   * incrementally in small cursor-based batches, which we pipeline-delete as
+   * they arrive.
    * @param pattern - Pattern to match (e.g., 'availability:restaurant-id:*')
    */
   async delPattern(pattern: string): Promise<void> {
-    try {
-      const store = (this.cacheManager as unknown as { store: unknown })
-        .store as {
-        keys?: (pattern: string) => Promise<string[]>;
-        del?: (key: string) => Promise<void>;
-      };
+    const client = this.getRedisClient();
+    if (!client) {
+      this.logger.warn('Pattern deletion not supported by cache store');
+      return;
+    }
 
-      if (store.keys && store.del) {
-        const keys = await store.keys(pattern);
-        await Promise.all(keys.map((key) => store.del?.(key)));
-        this.logger.debug(
-          `Cache pattern deleted: ${pattern} (${keys.length} keys)`,
-        );
-      } else {
-        this.logger.warn('Pattern deletion not supported by cache store');
-      }
+    try {
+      const deletedCount = await this.scanAndDelete(client, pattern);
+      this.logger.debug(
+        `Cache pattern deleted: ${pattern} (${deletedCount} keys)`,
+      );
     } catch (error) {
       this.logger.error(`Cache pattern delete error for ${pattern}:`, error);
     }
+  }
+
+  /**
+   * Walks the keyspace with SCAN in batches, deleting each batch via a
+   * pipeline. Backpressure is applied by pausing the scan stream while a
+   * batch's deletion is in flight.
+   */
+  private scanAndDelete(client: Redis, pattern: string): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+      let deletedCount = 0;
+      const stream = client.scanStream({ match: pattern, count: 100 });
+
+      stream.on('data', (keys: string[]) => {
+        if (keys.length === 0) {
+          return;
+        }
+        stream.pause();
+        const pipeline = client.pipeline();
+        keys.forEach((key) => pipeline.del(key));
+        pipeline
+          .exec()
+          .then(() => {
+            deletedCount += keys.length;
+            stream.resume();
+          })
+          .catch((error: unknown) => {
+            stream.destroy();
+            reject(error instanceof Error ? error : new Error(String(error)));
+          });
+      });
+
+      stream.on('end', () => resolve(deletedCount));
+      stream.on('error', (error: unknown) =>
+        reject(error instanceof Error ? error : new Error(String(error))),
+      );
+    });
+  }
+
+  /**
+   * Returns the underlying ioredis client backing the cache store, if the
+   * configured store exposes one (the Valkey/ioredis store does via its
+   * `client` getter).
+   */
+  private getRedisClient(): Redis | undefined {
+    const store = (this.cacheManager as unknown as { store?: unknown }).store;
+    const client = (store as { client?: Redis } | undefined)?.client;
+    return client;
   }
 
   /**
@@ -229,31 +278,27 @@ export class CacheService {
   }
 
   /**
-   * Increment a numeric value in cache
+   * Atomically increment a numeric value in cache using Redis' `INCRBY`.
+   *
+   * There is deliberately no non-atomic get-then-set fallback: a
+   * read-modify-write pair racing under concurrent callers silently loses
+   * increments. If the store isn't Redis-backed (no atomic primitive
+   * available), fail loudly instead of returning a value that may be wrong.
    * @param key - Cache key
    * @param delta - Amount to increment (default: 1)
    * @returns New value after increment
    */
   async incr(key: string, delta: number = 1): Promise<number> {
+    const client = this.getRedisClient();
+    if (!client) {
+      throw new Error(
+        'Atomic increment requires a Redis-backed cache store; none is configured',
+      );
+    }
+
     try {
-      const store = (this.cacheManager as unknown as { store: unknown })
-        .store as {
-        client?: {
-          incrby?: (key: string, delta: number) => Promise<number>;
-        };
-      };
-
-      if (store.client?.incrby) {
-        const newValue = await store.client.incrby(key, delta);
-        this.logger.debug(
-          `Cache incremented: ${key} by ${delta} = ${newValue}`,
-        );
-        return newValue;
-      }
-
-      const current = (await this.get<number>(key)) ?? 0;
-      const newValue = current + delta;
-      await this.set(key, newValue);
+      const newValue = await client.incrby(key, delta);
+      this.logger.debug(`Cache incremented: ${key} by ${delta} = ${newValue}`);
       return newValue;
     } catch (error) {
       this.logger.error(`Cache increment error for key ${key}:`, error);

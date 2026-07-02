@@ -70,6 +70,11 @@
 - Schema changes go through **migrations** (`npm run migration:generate`/`run`), never `synchronize` in prod.
 - `databaseConfig` (registerAs) feeds the app; the exported `dataSource` feeds the TypeORM CLI — keep both
   in `src/config/database.config.ts`.
+- **No weak default credentials.** `DATABASE_USERNAME`/`DATABASE_PASSWORD`/`DATABASE_NAME` have no
+  `?? 'postgres'`-style fallback — `database.config.ts` throws at boot if any is unset.
+- **`DATABASE_SSL=true` verifies certificates by default** (`rejectUnauthorized: true`). A custom CA
+  bundle is `DATABASE_SSL_CA`; disabling verification is an explicit, logged opt-out
+  (`DATABASE_SSL_REJECT_UNAUTHORIZED=false`), never the default.
 
 ## 7. Error handling & API shape
 
@@ -82,14 +87,27 @@
 ## 8. Caching
 
 - Use **`CacheService`** (`src/modules/cache/`) over Valkey: `get`/`set`/`del`/`delPattern`/`getOrSet`
-  (cache-aside)/`incr`. Build keys with `buildKey(prefix, ...parts)` and the `CachePrefix`/`CacheTTL` enums.
+  (cache-aside)/`incr`/`decr`. Build keys with `buildKey(prefix, ...parts)` and the `CachePrefix`/`CacheTTL`
+  enums.
 - **Invalidate on write** — clear/patch affected keys whenever the underlying data changes.
+- **`delPattern` uses `SCAN`, never the blocking `KEYS` command** — `KEYS` stalls every other client on the
+  shared Valkey instance while it walks the whole keyspace. Batches are deleted via a pipeline as the scan
+  cursor advances.
+- **`incr`/`decr` are atomic (`INCRBY`) or they throw.** There is no non-atomic get-then-set fallback — that
+  would silently lose increments under concurrent callers.
 
 ## 9. Auth & internal endpoints
 
-- JWT via `AuthModule` (Passport `jwt` strategy, `JwtAuthGuard`, `@Public()` to opt out).
-- Service-to-service / system endpoints live under `modules/internal` and are guarded by **`ApiKeyGuard`**
-  (`X-Api-Key` checked against the `SYSTEM_API_KEYS` comma list). Always `@ApiSecurity('api-key')` them.
+- JWT via `AuthModule` (Passport `jwt` strategy). **`JwtAuthGuard` is a global `APP_GUARD`** — every route
+  denies by default; use `@Public()` to opt a route (or whole controller) out.
+- Service-to-service / system endpoints live under `modules/internal`, are marked `@Public()` (to skip the
+  global JWT guard) and are guarded by **`ApiKeyGuard`** (`X-Api-Key` checked in constant time —
+  `crypto.timingSafeEqual` over SHA-256 digests — against the `SYSTEM_API_KEYS` comma list; fails closed if
+  unset). Always `@ApiSecurity('api-key')` them.
+- **Rate limiting is global** via `@nestjs/throttler`'s `ThrottlerGuard` (a second `APP_GUARD`, registered
+  before `JwtAuthGuard` so it also throttles unauthenticated/invalid requests), configured from
+  `RATE_LIMIT_TTL`/`RATE_LIMIT_MAX` (`rate-limit.config.ts`).
+- `helmet()` is applied as global Express middleware in `main.ts`.
 
 ## 10. Observability
 
@@ -97,12 +115,20 @@
   http/pg/ioredis/etc. before NestJS loads them).
 - NestJS `Logger` output bridges to Sentry Logs (`enableLogs`). `SentryGlobalFilter` is wired as `APP_FILTER`.
 - Each service uses its **own** Sentry project in the `sentry:sourcemaps` script.
+- **`sendDefaultPii: false` by default** — opt in only via `SENTRY_SEND_DEFAULT_PII=true` and only if the
+  service genuinely needs it. `beforeSend`/`beforeSendLog` scrub Authorization/Cookie/X-Api-Key headers and
+  token/secret/password-shaped fields from every event, log, extra/context data, and breadcrumb before it
+  leaves the process.
 
 ## 11. Bootstrap (`main.ts`) invariants
 
-`import './instrument'` first → create app with `rawBody: true` + env `LOG_LEVEL` → global `ValidationPipe`
-(`whitelist`/`forbidNonWhitelisted`/`transform`, 422 on error) → global `HttpExceptionFilter` → CORS from
-`CORS_ORIGIN` → Swagger gated by `ENABLE_DOCS` → listen on `0.0.0.0:${PORT}`.
+`import './instrument'` first → create app with `rawBody: true` + env `LOG_LEVEL` → `helmet()` middleware →
+global `ValidationPipe` (`whitelist`/`forbidNonWhitelisted`/`transform`, 422 on error) → global
+`HttpExceptionFilter` → CORS from `CORS_ORIGIN` → Swagger gated by `ENABLE_DOCS` → listen on
+`0.0.0.0:${PORT}`.
+
+- **CORS is fail-closed.** `main.ts` throws at boot if `CORS_ORIGIN` is unset — never falls back to
+  `origin: '*'`, which combined with `credentials: true` would let any origin make credentialed requests.
 
 ## 12. Folder structure (canonical)
 
@@ -129,8 +155,13 @@ src/
 ## 14. Security
 
 - Bcrypt cost ≥ 12; JWT in `Authorization: Bearer`; refresh tokens (where used) in httpOnly cookies.
+- **Every route denies by default** (global `JwtAuthGuard`); `@Public()` opts out explicitly.
 - Parameterised queries only (TypeORM) — never string-interpolate SQL.
-- CORS restricted to configured origins; rate-limit auth-sensitive endpoints; never log secrets/PII.
+- CORS is fail-closed and restricted to configured origins (§11); global rate limiting via
+  `@nestjs/throttler` (§9); `helmet()` on every service; never log secrets/PII, and Sentry scrubs
+  Authorization/Cookie/token/secret-shaped fields before anything leaves the process (§10).
+- No weak default credentials anywhere — API keys are compared in constant time and fail closed
+  when unset; database credentials have no fallback and TLS verifies certificates by default (§6, §9).
 
 ## 15. Git & Definition of Done
 
@@ -152,11 +183,17 @@ It deliberately ships only the cross-cutting infrastructure; feature modules are
 ## What ships in the skeleton
 - `src/common/` — `HttpExceptionFilter`, `ApiKeyGuard`, `RolesGuard`, `@Public()`/`@Roles()` decorators,
   custom validators (future-date, phone, strong-password, timezone), pagination DTO, `AppErrorCode`.
-- `src/config/` — `databaseConfig` (+ `dataSource`) and `cacheConfig`.
+- `src/config/` — `databaseConfig` (+ `dataSource`), `cacheConfig`, `rateLimitConfig`.
 - `src/database/` — `BaseEntity`, `SnakeNamingStrategy`.
-- `src/modules/auth/` — JWT strategy + guard, `JwtPayload` interface.
-- `src/modules/cache/` — `CacheModule` + `CacheService` (Valkey).
-- `src/modules/internal/` — `ApiKeyGuard`-protected `GET /internal/health`.
+- `src/modules/auth/` — JWT strategy + guard, `JwtPayload` interface. `JwtAuthGuard` is wired as a global
+  `APP_GUARD` in `app.module.ts` (deny-by-default; `@Public()` opts out).
+- `src/modules/cache/` — `CacheModule` + `CacheService` (Valkey), SCAN-based `delPattern`, atomic `incr`/`decr`.
+- `src/modules/internal/` — `@Public()` + `ApiKeyGuard`-protected `GET /internal/health` (opts out of the
+  JWT guard since it authenticates via `X-Api-Key` instead).
+- Global `ThrottlerGuard` (`@nestjs/throttler`, `RATE_LIMIT_TTL`/`RATE_LIMIT_MAX`) and `helmet()` middleware,
+  both wired by default — a clone doesn't need to add rate limiting or security headers itself.
+- `.dockerignore` (node_modules, `.env*`, `.git`, `.github`, `dist`, `.coverage`, logs) so `COPY . .` in the
+  Dockerfile never leaks secrets or bloats the build context.
 
 ## When you clone this to make a new service
 Follow the rename checklist in `README.md`: `package.json` `name`, the `sentry:sourcemaps` `--project`,
