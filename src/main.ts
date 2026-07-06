@@ -8,14 +8,6 @@ import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from '@common/filters';
 
-/**
- * Builds the CORS origin allow-list from `CORS_ORIGIN`.
- *
- * Fails CLOSED: if the variable is unset/empty we refuse to boot rather than
- * fall back to `origin: '*'` — an unrestricted policy combined with
- * `credentials: true` would let any site make credentialed requests.
- * Every clone of this skeleton must set `CORS_ORIGIN` explicitly.
- */
 function setupCors(app: INestApplication): void {
   const rawOrigins = process.env.CORS_ORIGIN?.trim();
   if (!rawOrigins) {

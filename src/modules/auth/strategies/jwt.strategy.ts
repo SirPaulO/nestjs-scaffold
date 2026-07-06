@@ -5,10 +5,6 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { JwtPayload } from '../interfaces';
 import { AppErrorCode } from '@common/constants/error-codes';
 
-/**
- * JWT strategy that validates the Bearer token in the Authorization header.
- * The validated payload is attached to req.user by Passport.
- */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(configService: ConfigService) {

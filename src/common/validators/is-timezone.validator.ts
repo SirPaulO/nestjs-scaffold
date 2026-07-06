@@ -47,9 +47,6 @@ const VALID_TIMEZONES = [
   'UTC',
 ];
 
-/**
- * Validates that a string is a recognised IANA timezone identifier.
- */
 export function IsTimezone(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string): void {
     registerDecorator({

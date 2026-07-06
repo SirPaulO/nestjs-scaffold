@@ -47,5 +47,5 @@ Add project-specific prefixes and TTLs as needed.
 
 ## Configuration
 
-Controlled by `VALKEY_*` and `CACHE_*` env vars (see `.env.example`).
-Config factory: `src/config/cache.config.ts`.
+Controlled by `VALKEY_*` env vars (see `.env.example`), surfaced under the `cache` config
+namespace. Config factory: `src/config/cache.config.ts`.

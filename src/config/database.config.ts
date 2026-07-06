@@ -4,8 +4,6 @@ import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 import { DataSource, DataSourceOptions } from 'typeorm';
 import { SnakeNamingStrategy } from '../database/strategies/snake-naming.strategy';
 
-// The TypeORM CLI (migration:generate/run) bootstraps this file directly,
-// outside Nest's ConfigModule, so load `.env` here for the CLI DataSource.
 loadEnv();
 
 interface DatabaseCredentials {
@@ -14,13 +12,6 @@ interface DatabaseCredentials {
   database: string;
 }
 
-/**
- * Resolves the required database credentials from the environment.
- *
- * Fails CLOSED: there is deliberately no `?? 'postgres'` / `?? 'backend'`
- * fallback. A clone that forgets to set these would otherwise silently
- * connect with well-known default credentials — refuse to boot instead.
- */
 function resolveDatabaseCredentials(): DatabaseCredentials {
   const username = process.env.DATABASE_USERNAME;
   const password = process.env.DATABASE_PASSWORD;
@@ -36,18 +27,6 @@ function resolveDatabaseCredentials(): DatabaseCredentials {
   return { username, password, database };
 }
 
-/**
- * Resolves TLS options for the Postgres connection.
- *
- * `DATABASE_SSL=true` no longer implies `rejectUnauthorized: false` — that
- * disabled certificate verification entirely, defeating the point of TLS
- * (silently accepts any certificate, including a MITM's). The secure default
- * is full verification; operators can supply a custom CA bundle via
- * `DATABASE_SSL_CA`, or explicitly opt out with
- * `DATABASE_SSL_REJECT_UNAUTHORIZED=false` when they understand the risk
- * (e.g. connecting to a managed DB over a private network with a
- * self-signed cert and no CA available).
- */
 type PostgresSslOption = boolean | { rejectUnauthorized: boolean; ca?: string };
 
 function resolveSsl(): PostgresSslOption {
@@ -65,10 +44,6 @@ function resolveSsl(): PostgresSslOption {
   };
 }
 
-/**
- * Database configuration for TypeORM
- * Supports connection pooling, migrations, and snake_case naming strategy
- */
 export const databaseConfig = registerAs(
   'database',
   (): TypeOrmModuleOptions => {
@@ -104,9 +79,6 @@ export const databaseConfig = registerAs(
   },
 );
 
-/**
- * DataSource configuration for TypeORM CLI (migrations)
- */
 function buildDataSourceOptions(): DataSourceOptions {
   const { username, password, database } = resolveDatabaseCredentials();
 

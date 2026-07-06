@@ -17,10 +17,6 @@ import { AppController } from './app.controller';
       provide: APP_FILTER,
       useClass: SentryGlobalFilter,
     },
-    // Global guards run in declaration order and must ALL pass.
-    // Rate-limit first (applies even to unauthenticated/invalid requests,
-    // which is exactly what protects login/guessing endpoints), then deny
-    // every route by default unless it opts out with @Public().
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
@@ -50,7 +46,6 @@ import { AppController } from './app.controller';
     CacheModule,
     AuthModule,
     InternalModule,
-    // Add feature modules here
   ],
   controllers: [AppController],
 })

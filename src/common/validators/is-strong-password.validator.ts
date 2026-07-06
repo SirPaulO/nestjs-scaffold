@@ -1,9 +1,5 @@
 import { registerDecorator, ValidationOptions } from 'class-validator';
 
-/**
- * Validates password strength:
- * min 8 chars, uppercase, lowercase, digit, special character.
- */
 export function IsStrongPassword(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string): void {
     registerDecorator({

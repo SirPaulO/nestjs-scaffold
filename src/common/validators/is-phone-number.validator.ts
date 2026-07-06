@@ -1,9 +1,5 @@
 import { registerDecorator, ValidationOptions } from 'class-validator';
 
-/**
- * Validates phone numbers in E.164-like international format.
- * Accepts: +1-555-123-4567, +44 20 7123 4567, +1 (555) 123-4567
- */
 export function IsPhoneNumber(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string): void {
     registerDecorator({
