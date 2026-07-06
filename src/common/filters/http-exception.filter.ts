@@ -17,22 +17,11 @@ interface ErrorResponse {
   details: object | null;
 }
 
-/**
- * Global exception filter that ensures all API errors return a consistent JSON structure:
- * `{ statusCode, message, error, errorCode, details }`
- *
- * Features:
- * - Debug mode via APP_DEBUG env var or X-Debug-Mode header (non-production only)
- * - Vague 403 messages when debug is off (security)
- * - Validation error extraction from class-validator (BadRequestException)
- */
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   private isDebugMode(request: Request): boolean {
-    // Verbose error details are never exposed in production, regardless of
-    // APP_DEBUG or the X-Debug-Mode header — both are dev/staging-only knobs.
     if (process.env.NODE_ENV === 'production') {
       return false;
     }
@@ -105,7 +94,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const responseObj = exceptionResponse as Record<string, unknown>;
 
-    // Validation errors from class-validator
     if (
       Array.isArray(responseObj.message) &&
       responseObj.message.length > 0 &&
@@ -123,7 +111,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       };
     }
 
-    // Extract AppErrorCode from the `error` description field
     const errorField = responseObj.error;
     const appErrorCode =
       typeof errorField === 'string' &&

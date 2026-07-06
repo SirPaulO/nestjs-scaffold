@@ -9,11 +9,6 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
 import { JwtPayload } from '@modules/auth/interfaces';
 import { AppErrorCode } from '../constants/error-codes';
 
-/**
- * Guard that enforces role-based access control.
- * Works with the @Roles() decorator.
- * Assumes the JWT guard has already populated req.user with a JwtPayload.
- */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}

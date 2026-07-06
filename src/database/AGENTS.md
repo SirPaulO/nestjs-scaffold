@@ -53,4 +53,5 @@ npm run migration:revert
 ## Naming Convention
 
 The `SnakeNamingStrategy` converts all entity/column names to `snake_case` automatically.
-FK names: `FK_{table}_{col}`, indexes: `IDX_{table}_{col}`, PKs: `PK_{table}`.
+FK names: `FK_{table}_{col}`, indexes: `IDX_{table}_{col}`, unique constraints:
+`UQ_{table}_{cols}`, PKs: `PK_{table}`.

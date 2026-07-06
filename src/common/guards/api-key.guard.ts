@@ -40,15 +40,6 @@ export class ApiKeyGuard implements CanActivate {
     throw new UnauthorizedException('Invalid or missing API key');
   }
 
-  /**
-   * Constant-time membership check.
-   *
-   * Both sides are hashed to a fixed-length SHA-256 digest first so
-   * `timingSafeEqual` never throws on a length mismatch (a raw comparison of
-   * variable-length strings/buffers would). Every configured key is compared
-   * — the loop never short-circuits — so total execution time doesn't leak
-   * whether a candidate is close to a match or which key it is.
-   */
   private isValidKey(candidate: string): boolean {
     const candidateHash = this.hash(candidate);
     let matched = false;

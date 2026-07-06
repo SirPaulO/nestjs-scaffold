@@ -4,7 +4,10 @@
 Generic NestJS 11 + TypeScript 5 backend scaffold.
 Stack: Node 24 LTS, NestJS 11, TypeORM 0.3, PostgreSQL 18, Valkey 7 (Redis-compatible).
 
-Coding standards, patterns & architecture: see **`CODING_STANDARDS.md`** — read it before developing or reviewing code.
+Coding standards, patterns & architecture live in **`CODING_STANDARDS.md`** — read it before
+developing or reviewing code. It is imported below so it loads automatically for any agent:
+
+@CODING_STANDARDS.md
 
 Update or create any AGENTS.md file as needed to reflect new or modified code, features, routes, and architecture.
 
@@ -16,7 +19,8 @@ Update or create any AGENTS.md file as needed to reflect new or modified code, f
 src/
 ├── modules/          # Feature modules (one per domain)
 │   ├── auth/         # JWT authentication (see modules/auth/AGENTS.md)
-│   └── cache/        # Valkey/Redis caching (see modules/cache/AGENTS.md)
+│   ├── cache/        # Valkey/Redis caching (see modules/cache/AGENTS.md)
+│   └── internal/     # X-Api-Key-guarded service-to-service routes (/internal/*)
 ├── common/           # Shared utilities (see common/AGENTS.md)
 ├── config/           # Config factories (see config/AGENTS.md)
 ├── database/         # TypeORM entities, migrations, seeds (see database/AGENTS.md)
@@ -45,9 +49,9 @@ test/                 # ALL tests live here — NO *.spec.ts in src/ (see Testin
 ## Local Development
 
 ```bash
-docker-compose up -d          # Start PostgreSQL + Valkey
-cp .env.example .env          # Configure environment
-npm install
+docker compose up -d          # Start PostgreSQL + Valkey
+cp .env.example .env          # Configure environment (set the real secrets)
+npm ci                        # Reproducible install from package-lock.json
 npm run migration:run
 npm run start:dev
 ```
@@ -138,21 +142,24 @@ docs(scope): description
 
 ### Commit Signing
 
-All commits are **SSH-signed** with the `id_ed25519_tavolai` key. The `load.sh` script starts an
-ssh-agent, adds that key, and exports `SSH_AUTH_SOCK` / `SSH_AGENT_PID` (plus `SSH_ASKPASS`).
-
-**Source** the script (don't `eval` it) so the exports land in your current shell:
+All commits are **SSH-signed**. Configure your own signing key once (paths and key names are
+per-developer — keep them out of the repo):
 
 ```bash
-source /home/sirpaul/Documents/load.sh
+git config user.signingkey /path/to/your/ssh_signing_key.pub
+git config gpg.format ssh
+git config commit.gpgsign true
 ```
 
-**For AI agents / non-interactive shells:** each command runs in a *fresh* shell — the loaded agent and
-its env vars do **not** persist between separate tool calls. Source the script and commit in the **same**
-invocation, chained with `&&`:
+Then commit normally: `git commit -m "feat(scope): message"` (add `-S` explicitly if signing isn't
+enabled globally). See `CONTRIBUTING.md` for the full setup.
+
+**For AI agents / non-interactive shells:** each tool call runs in a *fresh* shell, so an ssh-agent
+started in one call does not persist to the next. If your signing key needs an agent, load it and
+commit in the **same** invocation, chained with `&&`:
 
 ```bash
-source ~/Documents/load.sh && git commit -S -m "feat(scope): message"
+eval "$(ssh-agent -s)" && ssh-add /path/to/key && git commit -S -m "feat(scope): message"
 ```
 
 ---

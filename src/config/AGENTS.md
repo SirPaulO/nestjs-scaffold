@@ -36,5 +36,8 @@ Import via `@config/*` path alias.
 ## Environment Variables
 
 See `.env.example` for the full list.
-The `database.config.ts` also exports a bare `DataSource` used by the TypeORM CLI
-(migration commands).
+
+The `database.config.ts` also exports a bare `DataSource` used by the TypeORM CLI (migration
+commands). Because the CLI bootstraps that file directly — outside Nest's `ConfigModule` — the file
+calls `dotenv`'s `config()` at load time so the CLI `DataSource` still reads `.env`. Keep that call;
+removing it breaks `migration:generate` / `migration:run`.

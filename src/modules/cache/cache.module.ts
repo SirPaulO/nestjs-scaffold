@@ -4,10 +4,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import redisStore from 'cache-manager-ioredis-yet';
 import { CacheService } from './cache.service';
 
-/**
- * Global cache module providing Valkey/Redis caching capabilities
- * Exports CacheService and cache strategies for use across the application
- */
 @Global()
 @Module({
   imports: [

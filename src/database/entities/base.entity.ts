@@ -5,12 +5,6 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 
-/**
- * Base entity with common audit columns.
- * All entities should extend this class.
- *
- * Provides: id (UUID), createdAt, updatedAt, deletedAt (soft-delete).
- */
 export abstract class BaseEntity {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

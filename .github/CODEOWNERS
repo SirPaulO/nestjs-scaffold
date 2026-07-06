@@ -1,0 +1,5 @@
+# Code owners are requested for review automatically on matching paths.
+# Replace the placeholder below with your team or GitHub handles.
+# Docs: https://docs.github.com/articles/about-code-owners
+
+* @your-org/your-team

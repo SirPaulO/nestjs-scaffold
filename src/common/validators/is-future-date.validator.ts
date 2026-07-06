@@ -1,8 +1,5 @@
 import { registerDecorator, ValidationOptions } from 'class-validator';
 
-/**
- * Validates that a YYYY-MM-DD date string is today or in the future.
- */
 export function IsFutureDate(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string): void {
     registerDecorator({

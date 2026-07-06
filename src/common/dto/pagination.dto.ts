@@ -2,10 +2,6 @@ import { IsOptional, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
-/**
- * Base DTO for paginated list queries.
- * Extend or compose with domain-specific filter DTOs.
- */
 export class PaginationDto {
   @ApiPropertyOptional({
     description: 'Page number (1-indexed)',

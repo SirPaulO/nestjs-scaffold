@@ -10,6 +10,50 @@
 
 # Part 1 — Shared standards (identical across all backend services)
 
+## Technology stack
+
+| Category | Standard | Notes |
+|----------|----------|-------|
+| Runtime | **Node.js 24 LTS** | `.nvmrc` → `v24.13.1`; Dockerfile `node:24-alpine`; CI `node-version: '24'`. |
+| Framework | **NestJS 11.x** | `@nestjs/*` `^11.x`. |
+| Language | **TypeScript 5.x** | strict mode — see §1. |
+| ORM | **TypeORM 0.3.x** | with `SnakeNamingStrategy`. |
+| Database | **PostgreSQL 18** (`postgres:18-alpine`) | |
+| Cache | **Valkey 7** (Redis-compatible) via `ioredis` + `cache-manager` | |
+| Validation | `class-validator` + `class-transformer` | on every DTO. |
+| Auth | `@nestjs/passport` + `passport-jwt` + `@nestjs/jwt` | JWT bearer. |
+| Observability | `@sentry/nestjs` `^10` + `@sentry/cli` `^3` | see §10. |
+| Docs | `@nestjs/swagger` `^11` | served at `/api/docs`, gated by `ENABLE_DOCS`. |
+| Test | Jest 30 + `ts-jest` + `supertest` | see §13. |
+| Lint/Format | ESLint 9 (flat config) + Prettier 3 | see §3 → Lint & format. |
+| Git hooks | Husky 9 + commitlint | see §15. |
+| Rate limiting | `@nestjs/throttler` `^6` | global `ThrottlerGuard` (§9). |
+| Security headers | `helmet` `^8` | global middleware (§11). |
+
+The stack table in each repo's `AGENTS.md` must match this and the actual
+`package.json` / `.nvmrc` / `Dockerfile`.
+
+### Version targets (locked — conservative major strategy)
+
+| Package | Target | Notes |
+|---------|--------|-------|
+| Node | **24.x LTS** | `.nvmrc` → `v24.13.1` |
+| `@nestjs/*` core | `^11.1.x` | |
+| `typeorm` | `^0.3.30` | **stay 0.3.x** — TypeORM 1.0 is a separate, deferred upgrade |
+| `typescript` | `~5.9.3` | **stay 5.x** — TypeScript 6.0 is deferred |
+| `eslint` + `@eslint/js` | `^9.x` | **stay 9.x** — ESLint 10 is deferred |
+| `typescript-eslint` | `^8.x` | matched to ESLint 9 / TS 5.9 |
+| `prettier` | `^3.x` | |
+| `jest` + `@types/jest` | `^30.x` | |
+| `ts-jest` | `^29.x` | supports Jest 30 |
+| `@types/node` | `^24.x` | pinned to the Node 24 runtime (not 25.x) |
+| `class-validator` / `class-transformer` | `^0.15` / `^0.5` | |
+| `@sentry/nestjs` / `@sentry/cli` | `^10` / `^3` | |
+| `ioredis` / `pg` / `cache-manager` | `^5` / `^8` / `^7` | |
+| `helmet` / `@nestjs/throttler` | `^8` / `^6` | |
+| `husky` / `@commitlint/*` | `^9` / `^21` | |
+| `zod` | 3.x or 4.x latest-in-major | 3 → 4 unification deferred |
+
 ## 1. Language & TypeScript
 
 - **No `any`.** Use `unknown` and narrow, or a precise type/interface.
@@ -17,7 +61,10 @@
   `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `strictBindCallApply`). Fix every
   TS error before committing — do not suppress with `// @ts-ignore`.
 - **Explicit return types** on all public/exported methods.
-- `module: commonjs`, `target: ES2023`, `moduleResolution: node`. Source maps + `inlineSources` on (Sentry).
+- **Canonical `tsconfig.json`:** `module: commonjs`, `target: ES2023`, `moduleResolution: node`;
+  `esModuleInterop`, `isolatedModules`, `declaration`, `removeComments`, `emitDecoratorMetadata`,
+  `experimentalDecorators`, `allowSyntheticDefaultImports`; `sourceMap` + `inlineSources` on (Sentry);
+  `outDir: ./dist`, `incremental`, `skipLibCheck`; the `paths` aliases from §3.
 
 ## 2. Naming & files
 
@@ -37,6 +84,29 @@
   `@modules/*`, `@common/*`, `@config/*`, `@database/*`.
   They are configured in **three places that must stay in sync**: `tsconfig.json` `paths`,
   `package.json` jest `moduleNameMapper`, and ts-node for migrations.
+
+### Comments
+
+- **Minimal comments.** The code must be understandable without them — make classes, functions, and
+  variables self-explanatory through naming, not narration. If a comment is only restating what the
+  code already says, delete it and improve the name instead.
+- **No task/progress tracking in comments.** No `TODO:`/`FIXME:` backlogs, no "step 1/2/3"
+  narration, no ticket/task/PR references. That state belongs in the issue tracker, not the source.
+- **No block comments** (no JSDoc `/** … */`, no `/* … */` prose). Names carry the meaning. The
+  only non-prose exceptions are tool directives (`eslint-disable`, `ts-expect-error`) where
+  genuinely unavoidable, and a required file license/header. Non-obvious *rationale* that would
+  otherwise go in a block comment belongs in the nearest `AGENTS.md`, not inline.
+
+### Lint & format
+
+- **ESLint** — flat config (`eslint.config.mjs`), `typescript-eslint` type-checked. Production
+  `**/*.ts` (errors): `no-explicit-any`, `no-floating-promises`, `no-unsafe-*`,
+  `prefer-nullish-coalescing`, `prefer-optional-chain`, `require-await`, `no-unused-vars`
+  (`argsIgnorePattern: '^_'`), `prettier/prettier`. In `**/*.spec.ts` / `test/**`: `no-explicit-any`
+  off, `no-unsafe-*` relaxed to **warn**, `prefer-*` off; `require-await` and `no-unused-vars` stay errors.
+- **Prettier** (`.prettierrc`, identical in every repo): `singleQuote`, `trailingComma: all`, `semi`,
+  `printWidth: 80`, `tabWidth: 2`, `useTabs: false`, `endOfLine: auto`.
+- Commands: `npm run lint` (check) · `npm run format` (eslint --fix + prettier --write).
 
 ## 4. NestJS patterns
 
@@ -167,10 +237,26 @@ src/
 
 - **Conventional Commits** (`feat(scope):`, `fix(scope):`, `test:`, `docs:`, `refactor:`, `chore:`), enforced
   by commitlint. Branches: `feature/…`, `fix/…`, `hotfix/…`, `refactor/…`. All commits **SSH-signed**
-  (`source /home/sirpaul/Documents/load.sh` first).
+  — configure your own signing key (`git config user.signingkey` / an ssh-agent holding it) before
+  committing; see `CONTRIBUTING.md`. Keep machine-specific key paths out of the repo.
 - **Definition of Done — `npm run verify` (lint + build + jest --coverage) green with zero errors.** Fix every
   failure, even pre-existing ones surfaced by the run. Never weaken prod code just to pass a test. Update the
   relevant `AGENTS.md` for any architecture/route/behaviour change. Add new env vars to `.env.example`.
+- **Husky `pre-commit`** runs `npm install` then `npm run verify`, so the gate runs before every commit
+  locally. `npm run verify` = `npm run lint && npm run build && jest --coverage`.
+- **CI** (`.github/workflows/ci.yml`, on PR to `main`): checkout → setup-node (npm cache) → `npm ci`
+  → lint → build → test. `sentry-sourcemaps.yml` uploads source maps on push to `main` when the
+  `SENTRY_AUTH_TOKEN` secret is set.
+
+## 16. Documentation (`AGENTS.md` / `CLAUDE.md`)
+
+- **`CLAUDE.md` is a thin pointer** — its entire content is `@AGENTS.md`. `AGENTS.md` in turn imports
+  `@CODING_STANDARDS.md`, so this document loads automatically for any agent working in the repo.
+- **`AGENTS.md`** is the technical reference: overview, stack table, project structure, architecture &
+  patterns, Definition of Done, local dev, testing, git, security.
+- **Module-level `AGENTS.md`** for non-trivial modules, linked from the root `AGENTS.md` table.
+- **Keep docs in lockstep with code:** after any change to architecture, routes, module behaviour, or
+  standards, update the relevant `AGENTS.md`; after adding env vars, update `.env.example`.
 
 ---
 

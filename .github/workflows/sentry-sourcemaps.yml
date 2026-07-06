@@ -9,5 +9,26 @@ permissions:
 
 jobs:
   sentry-sourcemaps:
-    uses: SirPaulO/tavolai-contracts/.github/workflows/reusable-sentry-sourcemaps.yml@main
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and upload source maps
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "SENTRY_AUTH_TOKEN not set — skipping source map upload."
+            exit 0
+          fi
+          npm run build:prod
