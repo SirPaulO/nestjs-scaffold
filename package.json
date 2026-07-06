@@ -78,7 +78,7 @@
     "globals": "^16.0.0",
     "husky": "^9.1.7",
     "jest": "^30.4.2",
-    "prettier": "^3.8.3",
+    "prettier": "^3.9.4",
     "source-map-support": "^0.5.21",
     "ts-jest": "^29.4.11",
     "ts-loader": "^9.5.0",
