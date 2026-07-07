@@ -1,0 +1,127 @@
+name: Migrate — run
+
+# Standalone (self-contained) manual DB migration runner — everything is inlined
+# here, with no dependency on any external/reusable workflow. Opens an SSH tunnel
+# to the database server, forwards a local port onto the remote Postgres, then
+# runs `npm run migration:run` against the tunnel. Reverts nothing; see
+# migrate-revert.yml for rollback.
+#
+# When you fork this scaffold into a real service, adjust the `env:` block below
+# (DATABASE_NAME, SSH host/port/user) and the `environment:` name. Secrets
+# required (repo- or environment-scoped):
+#   SSH_PRIVATE_KEY        private key authorized for <SSH_USER>@<SSH_HOST>
+#   SSH_KEY_PASSPHRASE     (optional) passphrase for that key
+#   SSH_KNOWN_HOSTS        (optional) pinned known_hosts; else ssh-keyscan TOFU
+#   DATABASE_USERNAME      Postgres user
+#   DATABASE_PASSWORD      Postgres password
+#   PACKAGES_READ_TOKEN    (optional) read:packages PAT if this service uses @tavolai/* deps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration-run:
+    name: Run migrations
+    runs-on: ubuntu-latest
+    environment: PRD
+    timeout-minutes: 10
+    env:
+      # ── edit these when forking the scaffold ──────────────────────────────
+      DATABASE_NAME: backend
+      DATABASE_SSL: 'false' # loopback SSH tunnel: TLS neither needed nor verifiable
+      SSH_HOST: tavolai.cloud
+      SSH_PORT: '27015'
+      SSH_USER: dbuser
+      DB_REMOTE_HOST: 127.0.0.1 # host Postgres listens on, as seen from INSIDE the SSH host
+      DB_REMOTE_PORT: '5432'
+      LOCAL_PORT: '5432' # local bind on the runner (free on ubuntu-latest)
+      # ──────────────────────────────────────────────────────────────────────
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+          registry-url: https://npm.pkg.github.com
+          scope: '@tavolai'
+
+      # NOTE: do NOT set NODE_ENV=production here — the TypeORM CLI runs the
+      # migrations through ts-node, which lives in devDependencies.
+      - name: Install dependencies
+        run: npm i
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+
+      - name: Open SSH tunnel to the database
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KEY_PASSPHRASE: ${{ secrets.SSH_KEY_PASSPHRASE }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/tavolai_db
+          chmod 600 ~/.ssh/tavolai_db
+          if [ -n "${SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$SSH_KNOWN_HOSTS" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+          # Load the key into an ssh-agent so a passphrase-protected key works
+          # non-interactively: ssh-add reads the passphrase from SSH_ASKPASS
+          # (forced, since there is no tty). A passphrase-less key just loads.
+          eval "$(ssh-agent -s)"
+          if [ -n "${SSH_KEY_PASSPHRASE:-}" ]; then
+            printf '#!/usr/bin/env bash\necho "$SSH_KEY_PASSPHRASE"\n' > "$RUNNER_TEMP/askpass.sh"
+            chmod +x "$RUNNER_TEMP/askpass.sh"
+            SSH_ASKPASS="$RUNNER_TEMP/askpass.sh" SSH_ASKPASS_REQUIRE=force DISPLAY=:0 \
+              ssh-add ~/.ssh/tavolai_db
+            rm -f "$RUNNER_TEMP/askpass.sh"
+          else
+            ssh-add ~/.ssh/tavolai_db
+          fi
+
+          # -f backgrounds ssh only AFTER the forward is established
+          # (ExitOnForwardFailure), so a failed tunnel fails this step. The key
+          # is served by the agent, so no -i and no passphrase prompt.
+          ssh -N -f \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=accept-new \
+            -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=30 \
+            -L "${LOCAL_PORT}:${DB_REMOTE_HOST}:${DB_REMOTE_PORT}" \
+            -p "$SSH_PORT" \
+            "${SSH_USER}@${SSH_HOST}"
+
+          # Belt-and-suspenders: wait for the forwarded port to accept a TCP connection.
+          for _ in $(seq 1 30); do
+            if timeout 1 bash -c ": < /dev/tcp/127.0.0.1/${LOCAL_PORT}" 2>/dev/null; then
+              echo "Tunnel is up on 127.0.0.1:${LOCAL_PORT}"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::SSH tunnel never came up on 127.0.0.1:${LOCAL_PORT}"
+          exit 1
+
+      - name: Run migrations
+        env:
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_PORT: ${{ env.LOCAL_PORT }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+        run: npm run migration:run
+
+      - name: Close SSH tunnel
+        if: always()
+        run: pkill -f "${SSH_USER}@${SSH_HOST}" || true
