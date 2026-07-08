@@ -61,10 +61,14 @@ The stack table in each repo's `AGENTS.md` must match this and the actual
   `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `strictBindCallApply`). Fix every
   TS error before committing — do not suppress with `// @ts-ignore`.
 - **Explicit return types** on all public/exported methods.
-- **Canonical `tsconfig.json`:** `module: commonjs`, `target: ES2023`, `moduleResolution: node`;
-  `esModuleInterop`, `isolatedModules`, `declaration`, `removeComments`, `emitDecoratorMetadata`,
-  `experimentalDecorators`, `allowSyntheticDefaultImports`; `sourceMap` + `inlineSources` on (Sentry);
-  `outDir: ./dist`, `incremental`, `skipLibCheck`; the `paths` aliases from §3.
+- **Canonical `tsconfig.json`:** `module: commonjs`, `target: ES2023` — **no explicit
+  `moduleResolution`** (it is inferred as `node` from `module: commonjs`, so setting it is
+  redundant); `esModuleInterop`, `isolatedModules`, `declaration`, `removeComments`,
+  `emitDecoratorMetadata`, `experimentalDecorators`, `allowSyntheticDefaultImports`;
+  `sourceMap` + `inlineSources` on (Sentry); `outDir: ./dist`, `incremental`, `skipLibCheck`; the
+  `paths` aliases from §3. **No `baseUrl`** — each `paths` target is written repo-root-relative with
+  a `./` prefix (`@modules/*` → `["./src/modules/*"]`), which TypeScript 5 resolves relative to the
+  `tsconfig.json` location without needing `baseUrl`.
 
 ## 2. Naming & files
 
@@ -82,6 +86,8 @@ The stack table in each repo's `AGENTS.md` must match this and the actual
 - **Import order:** Node builtins → external packages → NestJS → internal (`@…` aliases) → relative.
 - **Path aliases — always use them in `src/`** instead of deep relative imports:
   `@modules/*`, `@common/*`, `@config/*`, `@database/*`.
+  In `tsconfig.json` these are declared **without `baseUrl`**, so each target is written
+  repo-root-relative with a `./` prefix (`@modules/*` → `["./src/modules/*"]`).
   They are configured in **three places that must stay in sync**: `tsconfig.json` `paths`,
   `package.json` jest `moduleNameMapper`, and ts-node for migrations.
 
