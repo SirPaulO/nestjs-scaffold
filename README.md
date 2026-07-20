@@ -4,7 +4,7 @@ A generic NestJS backend scaffold — the canonical template new backend service
 It ships only cross-cutting infrastructure (auth, caching, config, error handling, observability,
 security defaults); feature modules are added per service.
 
-**Stack:** Node 24 LTS · NestJS 11 · TypeScript 5 · TypeORM 0.3 · PostgreSQL 18 ·
+**Stack:** Node 24 LTS · NestJS 11 · TypeScript 6 · TypeORM 1 · PostgreSQL 18 ·
 Valkey 7 (Redis-compatible).
 
 ---

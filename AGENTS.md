@@ -1,8 +1,8 @@
 # Backend Skeleton — Technical Reference
 
 ## Overview
-Generic NestJS 11 + TypeScript 5 backend scaffold.
-Stack: Node 24 LTS, NestJS 11, TypeORM 0.3, PostgreSQL 18, Valkey 7 (Redis-compatible).
+Generic NestJS 11 + TypeScript 6 backend scaffold.
+Stack: Node 24 LTS, NestJS 11, TypeORM 1, PostgreSQL 18, Valkey 7 (Redis-compatible).
 
 Coding standards, patterns & architecture live in **`CODING_STANDARDS.md`** — read it before
 developing or reviewing code. It is imported below so it loads automatically for any agent:

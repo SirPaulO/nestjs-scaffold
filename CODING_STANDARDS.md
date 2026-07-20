@@ -16,8 +16,8 @@
 |----------|----------|-------|
 | Runtime | **Node.js 24 LTS** | `.nvmrc` → `v24.13.1`; Dockerfile `node:24-alpine`; CI `node-version: '24'`. |
 | Framework | **NestJS 11.x** | `@nestjs/*` `^11.x`. |
-| Language | **TypeScript 5.x** | strict mode — see §1. |
-| ORM | **TypeORM 0.3.x** | with `SnakeNamingStrategy`. |
+| Language | **TypeScript 6.x** | strict mode — see §1. |
+| ORM | **TypeORM 1.x** | with `SnakeNamingStrategy`. |
 | Database | **PostgreSQL 18** (`postgres:18-alpine`) | |
 | Cache | **Valkey 7** (Redis-compatible) via `ioredis` + `cache-manager` | |
 | Validation | `class-validator` + `class-transformer` | on every DTO. |
@@ -25,7 +25,7 @@
 | Observability | `@sentry/nestjs` `^10` + `@sentry/cli` `^3` | see §10. |
 | Docs | `@nestjs/swagger` `^11` | served at `/api/docs`, gated by `ENABLE_DOCS`. |
 | Test | Jest 30 + `ts-jest` + `supertest` | see §13. |
-| Lint/Format | ESLint 9 (flat config) + Prettier 3 | see §3 → Lint & format. |
+| Lint/Format | ESLint 10 (flat config) + Prettier 3 | see §3 → Lint & format. |
 | Git hooks | Husky 9 + commitlint | see §15. |
 | Rate limiting | `@nestjs/throttler` `^6` | global `ThrottlerGuard` (§9). |
 | Security headers | `helmet` `^8` | global middleware (§11). |
@@ -33,26 +33,26 @@
 The stack table in each repo's `AGENTS.md` must match this and the actual
 `package.json` / `.nvmrc` / `Dockerfile`.
 
-### Version targets (locked — conservative major strategy)
+### Version targets (track latest majors; toolchain ceilings noted)
 
 | Package | Target | Notes |
 |---------|--------|-------|
 | Node | **24.x LTS** | `.nvmrc` → `v24.13.1` |
 | `@nestjs/*` core | `^11.1.x` | |
-| `typeorm` | `^0.3.30` | **stay 0.3.x** — TypeORM 1.0 is a separate, deferred upgrade |
-| `typescript` | `~5.9.3` | **stay 5.x** — TypeScript 6.0 is deferred |
-| `eslint` + `@eslint/js` | `^9.x` | **stay 9.x** — ESLint 10 is deferred |
-| `typescript-eslint` | `^8.x` | matched to ESLint 9 / TS 5.9 |
+| `typeorm` | `^1.1.0` | on the 1.x line — `@nestjs/typeorm` peer allows `^1.0.0-dev` |
+| `typescript` | `~6.0.3` | **TS 7 held** — `typescript-eslint` peer-caps `<6.1`, `ts-jest` caps `<7` |
+| `eslint` + `@eslint/js` | `^10.x` | flat config |
+| `typescript-eslint` | `^8.x` | supports ESLint 10; peer-caps TypeScript at `<6.1` |
 | `prettier` | `^3.x` | |
 | `jest` + `@types/jest` | `^30.x` | |
-| `ts-jest` | `^29.x` | supports Jest 30 |
-| `@types/node` | `^24.x` | pinned to the Node 24 runtime (not 25.x) |
+| `ts-jest` | `^29.x` | supports Jest 30; peer-caps TypeScript at `<7` |
+| `@types/node` | `^24.x` | pinned to the Node 24 LTS runtime (not 26.x) |
 | `class-validator` / `class-transformer` | `^0.15` / `^0.5` | |
 | `@sentry/nestjs` / `@sentry/cli` | `^10` / `^3` | |
 | `ioredis` / `pg` / `cache-manager` | `^5` / `^8` / `^7` | |
 | `helmet` / `@nestjs/throttler` | `^8` / `^6` | |
 | `husky` / `@commitlint/*` | `^9` / `^21` | |
-| `zod` | 3.x or 4.x latest-in-major | 3 → 4 unification deferred |
+| `zod` | `^4.x` | |
 
 ## 1. Language & TypeScript
 
@@ -61,10 +61,16 @@ The stack table in each repo's `AGENTS.md` must match this and the actual
   `noUnusedParameters`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `strictBindCallApply`). Fix every
   TS error before committing — do not suppress with `// @ts-ignore`.
 - **Explicit return types** on all public/exported methods.
-- **Canonical `tsconfig.json`:** `module: commonjs`, `target: ES2023`, `moduleResolution: node`;
-  `esModuleInterop`, `isolatedModules`, `declaration`, `removeComments`, `emitDecoratorMetadata`,
-  `experimentalDecorators`, `allowSyntheticDefaultImports`; `sourceMap` + `inlineSources` on (Sentry);
-  `outDir: ./dist`, `incremental`, `skipLibCheck`; the `paths` aliases from §3.
+- **Canonical `tsconfig.json`:** `module: commonjs`, `target: ES2023`, `rootDir: "."` (TS 6
+  requires it explicit; ts-jest/ts-node span `src/` + `test/`, while `tsconfig.build.json` overrides
+  it with `rootDir: "./src"`). **No explicit `moduleResolution`** — it is inferred as `node10` from
+  `module: commonjs`; TS 6 deprecation-gates `node10`, so `ignoreDeprecations: "6.0"` is set
+  (modernizing `moduleResolution` is deferred to the eventual TS 7 migration). Also `esModuleInterop`,
+  `isolatedModules`, `declaration`, `removeComments`, `emitDecoratorMetadata`, `experimentalDecorators`,
+  `allowSyntheticDefaultImports`; `sourceMap` + `inlineSources` on (Sentry); `outDir: ./dist`,
+  `incremental`, `skipLibCheck`; the `paths` aliases from §3. **No `baseUrl`** — each `paths` target
+  is written repo-root-relative with a `./` prefix (`@modules/*` → `["./src/modules/*"]`), which
+  TypeScript 6 resolves relative to the `tsconfig.json` location without needing `baseUrl`.
 
 ## 2. Naming & files
 
@@ -82,6 +88,8 @@ The stack table in each repo's `AGENTS.md` must match this and the actual
 - **Import order:** Node builtins → external packages → NestJS → internal (`@…` aliases) → relative.
 - **Path aliases — always use them in `src/`** instead of deep relative imports:
   `@modules/*`, `@common/*`, `@config/*`, `@database/*`.
+  In `tsconfig.json` these are declared **without `baseUrl`**, so each target is written
+  repo-root-relative with a `./` prefix (`@modules/*` → `["./src/modules/*"]`).
   They are configured in **three places that must stay in sync**: `tsconfig.json` `paths`,
   `package.json` jest `moduleNameMapper`, and ts-node for migrations.
 
