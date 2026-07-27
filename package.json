@@ -43,7 +43,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.3",
     "@sentry/cli": "^3.6.1",
-    "@sentry/nestjs": "^10.67.0",
+    "@sentry/nestjs": "^10.68.0",
     "cache-manager": "^7.2.9",
     "cache-manager-ioredis-yet": "^2.1.2",
     "class-transformer": "^0.5.1",
