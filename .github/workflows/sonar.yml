@@ -38,7 +38,7 @@ jobs:
         # Skip cleanly when Sonar isn't configured (e.g. forks) instead of failing red,
         # mirroring the sentry-sourcemaps workflow's guard.
         if: ${{ env.SONAR_TOKEN != '' }}
-        uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995 # v8.1.0
+        uses: SonarSource/sonarqube-scan-action@ba9859eae8dd6bd29e412f25ddbbef3d032000f4 # v8.2.2
 
       - name: SonarQube Quality Gate
         # Same guard as the scan: no token -> no analysis -> no report-task.txt to gate on.
